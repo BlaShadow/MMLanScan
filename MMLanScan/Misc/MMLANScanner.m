@@ -15,7 +15,7 @@
 @interface MMLANScanner ()
 @property (nonatomic,strong) MMDevice *device;
 @property (nonatomic,strong) NSArray *ipsToPing;
-@property (nonatomic,assign) float currentHost;
+@property (nonatomic,assign) NSInteger currentHost;
 @property (nonatomic,strong) NSDictionary *brandDictionary;
 @property (nonatomic,strong) NSOperationQueue *queue;
 @property(nonatomic,assign,readwrite)BOOL isScanning;
@@ -90,52 +90,38 @@
     
     //Looping through IPs array and adding the operations to the queue
     for (NSString *ipStr in self.ipsToPing) {
-        
         //The ping operation
-        PingOperation *pingOperation = [[PingOperation alloc]initWithIPToPing:ipStr andCompletionHandler:^(NSError  * _Nullable error, NSString  * _Nonnull ip) {
+        PingOperation *pingOperation = [[PingOperation alloc] initWithIPToPing:ipStr andCompletionHandler:^(NSError  * _Nullable error, NSString  * _Nonnull ip) {
             if (!weakSelf) {
                 return;
             }
+
             //Since the first half of the operation is completed we will update our proggress by 0.5
-            weakSelf.currentHost = weakSelf.currentHost + 0.5;
-            
-        }];
-        
-        //The Find MAC Address for each operation
-        MACOperation *macOperation = [[MACOperation alloc] initWithIPToRetrieveMAC:ipStr andBrandDictionary:self.brandDictionary andCompletionHandler:^(NSError * _Nullable error, NSString * _Nonnull ip, MMDevice * _Nonnull device) {
-            
-            if (!weakSelf) {
-                return;
-            }
-            
-            //Since the second half of the operation is completed we will update our proggress by 0.5
-            weakSelf.currentHost = weakSelf.currentHost + 0.5;
+            weakSelf.currentHost = weakSelf.currentHost + 1;
+          
+          if (!error) {
+              //Letting know the delegate that found a new device (on Main Thread)
+              dispatch_async (dispatch_get_main_queue(), ^{
+                  if ([weakSelf.delegate respondsToSelector:@selector(lanScanDidFindNewDevice:)]) {
+                    MMDevice *device = [[MMDevice alloc] init];
+                    device.ipAddress = ip;
 
-            if (!error) {
-                //Letting know the delegate that found a new device (on Main Thread)
-                dispatch_async (dispatch_get_main_queue(), ^{
-                    if ([weakSelf.delegate respondsToSelector:@selector(lanScanDidFindNewDevice:)]) {
-                        [weakSelf.delegate lanScanDidFindNewDevice:device];
-                    }
-                });
-            }
-            
-            //Letting now the delegate the process  (on Main Thread)
-            dispatch_async (dispatch_get_main_queue(), ^{
-                if ([weakSelf.delegate respondsToSelector:@selector(lanScanProgressPinged:from:)]) {
-                    [weakSelf.delegate lanScanProgressPinged:self.currentHost from:[self.ipsToPing count]];
-                }
-            });
+                    [weakSelf.delegate lanScanDidFindNewDevice:device];
+                  }
+              });
+          }
+          
+          //Letting now the delegate the process  (on Main Thread)
+          dispatch_async (dispatch_get_main_queue(), ^{
+              if ([weakSelf.delegate respondsToSelector:@selector(lanScanProgressPinged:from:)]) {
+                  [weakSelf.delegate lanScanProgressPinged:self.currentHost from:[self.ipsToPing count]];
+              }
+          });
         }];
-
-        //Adding dependancy on macOperation. For each IP there 2 operations (macOperation and pingOperation). The dependancy makes sure that macOperation will run after pingOperation
-        [macOperation addDependency:pingOperation];
+      
         //Adding the operations in the queue
         [self.queue addOperation:pingOperation];
-        [self.queue addOperation:macOperation];
-        
     }
-
 }
 
 -(void)stop {
