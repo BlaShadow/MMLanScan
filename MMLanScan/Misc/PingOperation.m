@@ -11,7 +11,7 @@
 #import "LANProperties.h"
 #import "MacFinder.h"
 
-static const float PING_TIMEOUT = 1;
+static const float PING_TIMEOUT = 3;
 
 @interface PingOperation ()
 @property (nonatomic,strong) NSString *ipStr;
